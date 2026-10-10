@@ -1,0 +1,287 @@
+@page "/"
+@inject IJSRuntime JS
+
+<PageTitle>Zoo Keeper</PageTitle>
+
+<div class="game-container">
+    <h1>🦁 Zoo Keeper</h1>
+    <div class="stats">
+        <span>Score: @score</span>
+        <span>Level: @level</span>
+        <span>Moves: @moves</span>
+        <button class="btn btn-primary" @onclick="NewGame">New Game</button>
+    </div>
+
+    <div class="board">
+        @for (int r = 0; r < Rows; r++)
+        {
+            <div class="row">
+                @for (int c = 0; c < Cols; c++)
+                {
+                    var row = r;
+                    var col = c;
+                    var animal = board[r, c];
+                    var isSelected = selected.HasValue && selected.Value.r == r && selected.Value.c == c;
+                    var isMatching = matching.Contains((r, c));
+                    <div class="tile @(isSelected ? "selected" : "") @(isMatching ? "matching" : "")"
+                         @onclick="() => OnTileClick(row, col)">
+                        @GetEmoji(animal)
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (message != null)
+    {
+        <div class="message">@message</div>
+    }
+</div>
+
+<style>
+    .game-container {
+        text-align: center;
+        padding: 20px;
+        font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(180deg, #87CEEB 0%, #98FB98 100%);
+        min-height: 100vh;
+    }
+    h1 { color: #2c3e50; margin-bottom: 10px; }
+    .stats {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-bottom: 20px;
+        font-size: 1.2em;
+        font-weight: bold;
+    }
+    .board {
+        display: inline-block;
+        background: #f4d03f;
+        padding: 10px;
+        border-radius: 15px;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+    }
+    .row { display: flex; }
+    .tile {
+        width: 60px;
+        height: 60px;
+        margin: 3px;
+        background: #fff;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2.2em;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+        user-select: none;
+        border: 3px solid transparent;
+    }
+    .tile:hover { transform: scale(1.08); }
+    .tile.selected { border-color: #e74c3c; box-shadow: 0 0 10px #e74c3c; }
+    .tile.matching { animation: pop 0.4s ease; background: #ffeb3b; }
+    @@keyframes pop {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.3); }
+        100% { transform: scale(1); }
+    }
+    .message { margin-top: 15px; font-size: 1.3em; color: #27ae60; font-weight: bold; }
+    .btn { margin-left: 10px; }
+</style>
+
+@code {
+    const int Rows = 8;
+    const int Cols = 8;
+    enum Animal { Lion, Giraffe, Panda, Elephant, Hippo, Crocodile, Monkey }
+
+    Animal[,] board = new Animal[Rows, Cols];
+    (int r, int c)? selected = null;
+    HashSet<(int r, int c)> matching = new();
+    int score = 0;
+    int level = 1;
+    int moves = 0;
+    string? message;
+    Random rnd = new();
+
+    protected override void OnInitialized()
+    {
+        NewGame();
+    }
+
+    void NewGame()
+    {
+        score = 0;
+        level = 1;
+        moves = 0;
+        message = "Match 3 or more animals!";
+        GenerateBoard();
+        StateHasChanged();
+    }
+
+    void GenerateBoard()
+    {
+        for (int r = 0; r < Rows; r++)
+            for (int c = 0; c < Cols; c++)
+                board[r, c] = (Animal)rnd.Next(7);
+
+        // Remove initial matches
+        int safety = 0;
+        while (FindMatches().Count > 0 && safety++ < 100)
+        {
+            foreach (var (r, c) in FindMatches())
+                board[r, c] = (Animal)rnd.Next(7);
+        }
+    }
+
+    string GetEmoji(Animal a)
+    {
+        if ((int)a < 0) return "";
+        return a switch
+        {
+            Animal.Lion => "🦁",
+            Animal.Giraffe => "🦒",
+            Animal.Panda => "🐼",
+            Animal.Elephant => "🐘",
+            Animal.Hippo => "🦛",
+            Animal.Crocodile => "🐊",
+            Animal.Monkey => "🐒",
+            _ => "❓"
+        };
+    }
+
+    async Task OnTileClick(int r, int c)
+    {
+        if (selected == null)
+        {
+            selected = (r, c);
+            return;
+        }
+
+        var (sr, sc) = selected.Value;
+        if (IsAdjacent(sr, sc, r, c))
+        {
+            // Swap
+            (board[sr, sc], board[r, c]) = (board[r, c], board[sr, sc]);
+            moves++;
+
+            var matches = FindMatches();
+            if (matches.Count == 0)
+            {
+                // Invalid swap, reverse
+                (board[sr, sc], board[r, c]) = (board[r, c], board[sr, sc]);
+                moves--;
+                message = "No match! Try again.";
+            }
+            else
+            {
+                await ProcessMatches();
+            }
+        }
+
+        selected = null;
+        StateHasChanged();
+    }
+
+    bool IsAdjacent(int r1, int c1, int r2, int c2)
+    {
+        return (Math.Abs(r1 - r2) == 1 && c1 == c2) || (Math.Abs(c1 - c2) == 1 && r1 == r2);
+    }
+
+    HashSet<(int r, int c)> FindMatches()
+    {
+        var set = new HashSet<(int, int)>();
+
+        // Horizontal
+        for (int r = 0; r < Rows; r++)
+        {
+            int count = 1;
+            for (int c = 1; c < Cols; c++)
+            {
+                if (board[r, c] == board[r, c - 1] && (int)board[r, c] >= 0)
+                    count++;
+                else
+                {
+                    if (count >= 3)
+                        for (int k = 0; k < count; k++) set.Add((r, c - 1 - k));
+                    count = 1;
+                }
+            }
+            if (count >= 3)
+                for (int k = 0; k < count; k++) set.Add((r, Cols - 1 - k));
+        }
+
+        // Vertical
+        for (int c = 0; c < Cols; c++)
+        {
+            int count = 1;
+            for (int r = 1; r < Rows; r++)
+            {
+                if (board[r, c] == board[r - 1, c] && (int)board[r, c] >= 0)
+                    count++;
+                else
+                {
+                    if (count >= 3)
+                        for (int k = 0; k < count; k++) set.Add((r - 1 - k, c));
+                    count = 1;
+                }
+            }
+            if (count >= 3)
+                for (int k = 0; k < count; k++) set.Add((Rows - 1 - k, c));
+        }
+
+        return set;
+    }
+
+    async Task ProcessMatches()
+    {
+        while (true)
+        {
+            var matches = FindMatches();
+            if (matches.Count == 0) break;
+
+            matching = matches;
+            int points = matches.Count * 10 * level;
+            score += points;
+            message = $"+{points} points!";
+            StateHasChanged();
+            await Task.Delay(400);
+
+            // Clear
+            foreach (var (r, c) in matches)
+                board[r, c] = (Animal)(-1);
+
+            // Gravity + fill
+            for (int c = 0; c < Cols; c++)
+            {
+                int write = Rows - 1;
+                for (int r = Rows - 1; r >= 0; r--)
+                {
+                    if ((int)board[r, c] != -1)
+                    {
+                        board[write, c] = board[r, c];
+                        if (write != r) board[r, c] = (Animal)(-1);
+                        write--;
+                    }
+                }
+                for (int r = write; r >= 0; r--)
+                    board[r, c] = (Animal)rnd.Next(7);
+            }
+
+            matching.Clear();
+            StateHasChanged();
+            await Task.Delay(200);
+        }
+
+        int newLevel = (score / 500) + 1;
+        if (newLevel > level)
+        {
+            level = newLevel;
+            message = $"Level {level}!";
+        }
+        else
+        {
+            message = null;
+        }
+    }
+}
