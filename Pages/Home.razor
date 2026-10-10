@@ -1,4 +1,5 @@
 @page "/"
+@implements IDisposable
 @inject IJSRuntime JS
 
 <PageTitle>Zoo Keeper</PageTitle>
@@ -23,7 +24,8 @@
                     var animal = board[r, c];
                     var isSelected = selected.HasValue && selected.Value.r == r && selected.Value.c == c;
                     var isMatching = matching.Contains((r, c));
-                    <div class="tile @(isSelected ? "selected" : "") @(isMatching ? "matching" : "")"
+                    var isHint = hintTiles.Contains((row, col));
+                    <div class="tile @(isSelected ? "selected" : "") @(isMatching ? "matching" : "") @(isHint ? "hint" : "")"
                          @onclick="() => OnTileClick(row, col)">
                         @if ((int)animal >= 0)
                         {
@@ -111,6 +113,14 @@
     }
     .tile.selected { border-color: #e74c3c; box-shadow: 0 0 10px #e74c3c; }
     .tile.matching { animation: pop 0.4s ease; background: #ffeb3b; }
+    .tile.hint { animation: hint-pulse 0.7s ease-in-out 3; }
+    @@keyframes hint-pulse {
+        0%, 100% { background: #fff8ea; box-shadow: none; }
+        50% { background: #fff1b8; box-shadow: 0 0 0 2px rgba(255, 196, 60, 0.95); }
+    }
+    @@media (prefers-reduced-motion: reduce) {
+        .tile.hint { animation: none; box-shadow: 0 0 0 2px rgba(255, 196, 60, 0.95); }
+    }
     @@keyframes pop {
         0% { transform: scale(1); }
         50% { transform: scale(1.3); }
@@ -138,14 +148,23 @@
     const int Cols = 8;
     enum Animal { Lion, Giraffe, Panda, Elephant, Hippo, Crocodile, Monkey }
 
+    const int HintDelayMs = 4000;
+    const int HintFlashMs = 2100;
+
     Animal[,] board = new Animal[Rows, Cols];
     (int r, int c)? selected = null;
     HashSet<(int r, int c)> matching = new();
+    HashSet<(int r, int c)> hintTiles = new();
     int score = 0;
     int level = 1;
     int moves = 0;
     string? message;
     Random rnd = new();
+    int hintVersion;
+    int gameId;
+    bool resolving;
+    bool disposed;
+    CancellationTokenSource lifetime = new();
 
     protected override void OnInitialized()
     {
@@ -154,12 +173,25 @@
 
     void NewGame()
     {
+        gameId++;
         score = 0;
         level = 1;
         moves = 0;
+        selected = null;
+        matching.Clear();
+        resolving = false;
         message = "Match 3 or more animals!";
         GenerateBoard();
+        ResetHintTimer();
         StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        hintVersion++;
+        lifetime.Cancel();
+        lifetime.Dispose();
     }
 
     void GenerateBoard()
@@ -181,6 +213,10 @@
 
     async Task OnTileClick(int r, int c)
     {
+        if (resolving) return;
+
+        ResetHintTimer();
+
         if (selected == null)
         {
             selected = (r, c);
@@ -204,12 +240,91 @@
             }
             else
             {
-                await ProcessMatches();
+                var id = gameId;
+                resolving = true;
+                try
+                {
+                    await ProcessMatches(id);
+                }
+                finally
+                {
+                    if (id == gameId)
+                    {
+                        resolving = false;
+                        ResetHintTimer();
+                    }
+                }
             }
         }
 
         selected = null;
         StateHasChanged();
+    }
+
+    void ResetHintTimer()
+    {
+        hintTiles.Clear();
+        var version = ++hintVersion;
+        _ = RunHintAsync(version);
+    }
+
+    async Task RunHintAsync(int version)
+    {
+        try
+        {
+            await Task.Delay(HintDelayMs, lifetime.Token);
+            if (version != hintVersion || disposed || resolving) return;
+
+            var move = FindHint();
+            if (move == null)
+            {
+                if (version == hintVersion && !disposed)
+                    ResetHintTimer();
+                return;
+            }
+
+            hintTiles = new HashSet<(int r, int c)>(move);
+            await RefreshAsync();
+            await Task.Delay(HintFlashMs, lifetime.Token);
+            if (version != hintVersion || disposed) return;
+
+            hintTiles.Clear();
+            await RefreshAsync();
+            ResetHintTimer();
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    async Task RefreshAsync()
+    {
+        if (!disposed)
+            await InvokeAsync(StateHasChanged);
+    }
+
+    List<(int r, int c)>? FindHint()
+    {
+        for (int r = 0; r < Rows; r++)
+        {
+            for (int c = 0; c < Cols; c++)
+            {
+                if (c + 1 < Cols && SwapMakesMatch(r, c, r, c + 1))
+                    return new() { (r, c), (r, c + 1) };
+                if (r + 1 < Rows && SwapMakesMatch(r, c, r + 1, c))
+                    return new() { (r, c), (r + 1, c) };
+            }
+        }
+
+        return null;
+    }
+
+    bool SwapMakesMatch(int r1, int c1, int r2, int c2)
+    {
+        (board[r1, c1], board[r2, c2]) = (board[r2, c2], board[r1, c1]);
+        bool match = FindMatches().Count > 0;
+        (board[r1, c1], board[r2, c2]) = (board[r2, c2], board[r1, c1]);
+        return match;
     }
 
     bool IsAdjacent(int r1, int c1, int r2, int c2)
@@ -262,9 +377,9 @@
         return set;
     }
 
-    async Task ProcessMatches()
+    async Task ProcessMatches(int id)
     {
-        while (true)
+        while (id == gameId)
         {
             var matches = FindMatches();
             if (matches.Count == 0) break;
@@ -275,6 +390,7 @@
             message = $"+{points} points!";
             StateHasChanged();
             await Task.Delay(400);
+            if (id != gameId) return;
 
             // Clear
             foreach (var (r, c) in matches)
@@ -300,6 +416,7 @@
             matching.Clear();
             StateHasChanged();
             await Task.Delay(200);
+            if (id != gameId) return;
         }
 
         int newLevel = (score / 500) + 1;
