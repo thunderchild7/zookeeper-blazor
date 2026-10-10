@@ -1,5 +1,7 @@
 # Zoo Keeper - Blazor WebAssembly
 
+Play it: https://thunderchild7.github.io/zookeeper-blazor/
+
 A cute match-3 puzzle game inspired by the classic Japanese **Zoo Keeper** / Zookeeper game.
 
 ## Features

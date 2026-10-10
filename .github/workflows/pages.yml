@@ -1,0 +1,81 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable GitHub Pages
+        run: |
+          api() {
+            curl -sS -o "$2" -w "%{http_code}" \
+              -X "$1" \
+              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${{ github.repository }}/pages" \
+              -d '{"build_type":"workflow"}'
+          }
+          status=$(api POST /tmp/pages-create.json)
+          echo "create pages: $status"
+          cat /tmp/pages-create.json
+          echo
+          if [ "$status" = "201" ]; then
+            exit 0
+          fi
+          status=$(api PUT /tmp/pages-update.json)
+          echo "update pages: $status"
+          cat /tmp/pages-update.json
+          echo
+          if [ "$status" = "204" ] || [ "$status" = "200" ]; then
+            exit 0
+          fi
+          exit 1
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish
+        run: dotnet publish -c Release -o publish
+
+      - name: Prepare Pages output
+        run: |
+          sed -i 's|<base href="/" />|<base href="/zookeeper-blazor/" />|' publish/wwwroot/index.html
+          touch publish/wwwroot/.nojekyll
+          test -f publish/wwwroot/index.html
+          test -f publish/wwwroot/404.html
+          test -f publish/wwwroot/_framework/blazor.boot.json
+          grep -q 'base href="/zookeeper-blazor/"' publish/wwwroot/index.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish/wwwroot
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
