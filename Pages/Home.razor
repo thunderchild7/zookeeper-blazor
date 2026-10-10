@@ -15,7 +15,7 @@
     <div class="board">
         @for (int r = 0; r < Rows; r++)
         {
-            <div class="row">
+            <div class="board-row">
                 @for (int c = 0; c < Cols; c++)
                 {
                     var row = r;
@@ -40,45 +40,74 @@
 
 <style>
     .game-container {
+        --gap: clamp(2px, 0.8vw, 6px);
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
         text-align: center;
-        padding: 20px;
+        padding: clamp(8px, 2vw, 20px);
+        padding-left: max(clamp(8px, 2vw, 20px), env(safe-area-inset-left));
+        padding-right: max(clamp(8px, 2vw, 20px), env(safe-area-inset-right));
         font-family: 'Segoe UI', sans-serif;
         background: linear-gradient(180deg, #87CEEB 0%, #98FB98 100%);
-        min-height: 100vh;
+        min-height: 100dvh;
+        overflow-x: hidden;
     }
-    h1 { color: #2c3e50; margin-bottom: 10px; }
+    h1 {
+        color: #2c3e50;
+        margin-bottom: 10px;
+        font-size: clamp(1.5rem, 6vw, 2.5rem);
+    }
     .stats {
         display: flex;
+        flex-wrap: wrap;
         justify-content: center;
-        gap: 20px;
-        margin-bottom: 20px;
-        font-size: 1.2em;
+        align-items: center;
+        gap: 8px 16px;
+        margin-bottom: 12px;
+        font-size: clamp(0.95rem, 3.6vw, 1.2rem);
         font-weight: bold;
     }
     .board {
-        display: inline-block;
+        display: flex;
+        flex-direction: column;
+        gap: var(--gap);
+        box-sizing: border-box;
+        width: min(100%, 560px);
+        margin: 0 auto;
         background: #f4d03f;
-        padding: 10px;
+        padding: clamp(4px, 1.2vw, 10px);
         border-radius: 15px;
         box-shadow: 0 8px 16px rgba(0,0,0,0.2);
     }
-    .row { display: flex; }
+    .board-row {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        gap: var(--gap);
+    }
     .tile {
-        width: 60px;
-        height: 60px;
-        margin: 3px;
+        box-sizing: border-box;
+        width: 100%;
+        aspect-ratio: 1;
+        min-width: 0;
+        margin: 0;
         background: #fff;
-        border-radius: 10px;
+        border-radius: clamp(6px, 1.5vw, 10px);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 2.2em;
+        font-size: clamp(1rem, 6.4vw, 2.2rem);
+        line-height: 1;
         cursor: pointer;
         transition: transform 0.15s, box-shadow 0.15s;
         user-select: none;
-        border: 3px solid transparent;
+        -webkit-user-select: none;
+        touch-action: manipulation;
+        border: clamp(2px, 0.4vw, 3px) solid transparent;
     }
-    .tile:hover { transform: scale(1.08); }
+    @@media (hover: hover) and (pointer: fine) {
+        .tile:hover { transform: scale(1.08); }
+    }
     .tile.selected { border-color: #e74c3c; box-shadow: 0 0 10px #e74c3c; }
     .tile.matching { animation: pop 0.4s ease; background: #ffeb3b; }
     @@keyframes pop {
@@ -86,8 +115,7 @@
         50% { transform: scale(1.3); }
         100% { transform: scale(1); }
     }
-    .message { margin-top: 15px; font-size: 1.3em; color: #27ae60; font-weight: bold; }
-    .btn { margin-left: 10px; }
+    .message { margin-top: 15px; font-size: clamp(1rem, 4vw, 1.3rem); color: #27ae60; font-weight: bold; }
 </style>
 
 @code {
