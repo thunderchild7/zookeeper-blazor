@@ -4,8 +4,13 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ZooKeeperWasm</title>
+    <title>Zoo Keeper</title>
     <base href="/" />
+    <meta name="theme-color" content="#2c3e50" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Zoo Keeper" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <!-- GitHub Pages has no SPA fallback. 404.html redirects deep links to /?p=..., and this restores the real path before Blazor starts. https://github.com/rafrex/spa-github-pages -->
     <script type="text/javascript">
         (function (l) {
@@ -28,6 +33,9 @@
     <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="manifest.webmanifest" rel="manifest" />
+    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
     <link href="ZooKeeperWasm.styles.css" rel="stylesheet" />
 </head>
 
@@ -46,6 +54,7 @@
         <a class="dismiss">🗙</a>
     </div>
     <script src="_framework/blazor.webassembly.js"></script>
+    <script>navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' });</script>
 </body>
 
 </html>

@@ -10,6 +10,7 @@ A cute match-3 puzzle game inspired by the classic Japanese **Zoo Keeper** / Zoo
 - Match 3 or more in a row or column to clear them
 - Cascading matches, gravity, and new tiles falling from the top
 - Score, capture quotas, move counter, and a time bar
+- Installable on a phone or desktop, and playable offline after the first visit
 - Clean, colorful UI
 
 ## How to Run

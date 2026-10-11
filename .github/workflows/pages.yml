@@ -33,6 +33,19 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Set Pages base path
+        run: |
+          base_path="${{ steps.pages.outputs.base_path }}"
+          if [ -z "$base_path" ]; then
+            href="/"
+          else
+            href="${base_path%/}/"
+          fi
+          # Rewrite before publish so the service worker asset hashes match the files that ship.
+          sed -i "s|<base href=\"/\" />|<base href=\"${href}\" />|" wwwroot/index.html
+          sed -i "s|const base = \"/\";|const base = \"${href}\";|" wwwroot/service-worker.published.js
+          echo "base href is ${href}"
+
       - name: Publish
         run: dotnet publish -c Release -o publish
 
@@ -44,12 +57,36 @@ jobs:
           else
             href="${base_path%/}/"
           fi
-          sed -i "s|<base href=\"/\" />|<base href=\"${href}\" />|" publish/wwwroot/index.html
           touch publish/wwwroot/.nojekyll
           test -f publish/wwwroot/index.html
           test -f publish/wwwroot/404.html
           test -f publish/wwwroot/_framework/blazor.boot.json
+          test -f publish/wwwroot/manifest.webmanifest
+          test -f publish/wwwroot/service-worker.js
+          test -f publish/wwwroot/service-worker-assets.js
+          test -f publish/wwwroot/icon-192.png
+          test -f publish/wwwroot/icon-512.png
           grep -q "base href=\"${href}\"" publish/wwwroot/index.html
+          grep -q "const base = \"${href}\";" publish/wwwroot/service-worker.js
+          python3 - << 'PY'
+          import base64, hashlib, json, pathlib, re, sys
+          root = pathlib.Path("publish/wwwroot")
+          text = (root / "service-worker-assets.js").read_text()
+          data = json.loads(text[text.find("{") : text.rfind("}") + 1])
+          bad = []
+          for asset in data["assets"]:
+              path = root / asset["url"]
+              if not path.is_file():
+                  bad.append("missing " + asset["url"])
+                  continue
+              digest = base64.b64encode(hashlib.sha256(path.read_bytes()).digest()).decode()
+              if asset["hash"] != "sha256-" + digest:
+                  bad.append("hash " + asset["url"])
+          if bad:
+              print("\n".join(bad[:30]))
+              sys.exit(1)
+          print("service worker hashes match", len(data["assets"]), "assets")
+          PY
           echo "base href is ${href}"
 
       - name: Upload artifact
