@@ -9,7 +9,7 @@ A cute match-3 puzzle game inspired by the classic Japanese **Zoo Keeper** / Zoo
 - Click to select, click adjacent tile to swap
 - Match 3 or more in a row or column to clear them
 - Cascading matches, gravity, and new tiles falling from the top
-- Score, capture quotas, and move counter
+- Score, capture quotas, move counter, and a time bar
 - Clean, colorful UI
 
 ## How to Run
@@ -27,6 +27,7 @@ A cute match-3 puzzle game inspired by the classic Japanese **Zoo Keeper** / Zoo
 - Only swaps that create a match of 3+ are allowed.
 - Cleared animals give points (more at higher levels).
 - Each level lists animals to capture. Matching them counts down the quota, and a full quota starts the next level.
+- The TIME bar under the board runs down. Each animal you clear fills it a little. The round ends when it is empty.
 - Have fun matching cute animals!
 
 ## Project Structure

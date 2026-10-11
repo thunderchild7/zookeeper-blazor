@@ -24,7 +24,7 @@
         }
     </div>
 
-    <div class="board">
+    <div class="board @(gameOver ? "locked" : "")">
         @for (int r = 0; r < Rows; r++)
         {
             <div class="board-row">
@@ -48,9 +48,17 @@
         }
     </div>
 
+    <div class="time-bar">
+        <span class="time-label" id="time-label">TIME</span>
+        <div class="time-track" role="meter" aria-labelledby="time-label"
+             aria-valuemin="0" aria-valuemax="@TimeMaxMs" aria-valuenow="@timeLeftMs">
+            <div class="time-fill @TimeFillClass" style="width:@(TimeWidth)%"></div>
+        </div>
+    </div>
+
     @if (message != null)
     {
-        <div class="message">@message</div>
+        <div class="message @(gameOver ? "bad" : "")">@message</div>
     }
 </div>
 
@@ -128,6 +136,10 @@
         border-radius: 4px;
         box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
+    .board.locked {
+        opacity: 0.55;
+        pointer-events: none;
+    }
     .board-row {
         display: grid;
         grid-template-columns: repeat(8, minmax(0, 1fr));
@@ -195,7 +207,41 @@
         vertical-align: -0.12em;
         margin-right: 0.12em;
     }
+    .time-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: var(--board);
+        margin: 8px auto 0;
+    }
+    .time-label {
+        flex: 0 0 auto;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        font-size: 0.8rem;
+        color: #2c3e50;
+    }
+    .time-track {
+        flex: 1 1 auto;
+        height: 18px;
+        background: #243140;
+        border-radius: 2px;
+        overflow: hidden;
+        box-shadow: inset 0 0 0 2px #1a2430;
+    }
+    .time-fill {
+        height: 100%;
+        width: 0;
+        background: #37d67a;
+        transition: width 0.12s linear, background-color 0.2s linear;
+    }
+    .time-fill.mid { background: #f0c42e; }
+    .time-fill.low { background: #e74c3c; }
     .message { margin-top: 15px; font-size: clamp(1rem, 4vw, 1.3rem); color: #27ae60; font-weight: bold; }
+    .message.bad { color: #c0392b; }
+    @@media (prefers-reduced-motion: reduce) {
+        .time-fill { transition: none; }
+    }
 </style>
 
 @code {
@@ -205,6 +251,9 @@
 
     const int HintDelayMs = 4000;
     const int HintFlashMs = 2100;
+    const int TimeMaxMs = 40000;
+    const int TimeGainPerAnimalMs = 2000;
+    const int ClockTickMs = 100;
 
     Animal[,] board = new Animal[Rows, Cols];
     (int r, int c)? selected = null;
@@ -214,17 +263,29 @@
     int score = 0;
     int level = 1;
     int moves = 0;
+    int timeLeftMs = TimeMaxMs;
     string? message;
     Random rnd = new();
     int hintVersion;
     int gameId;
     bool resolving;
+    bool gameOver;
     bool disposed;
     CancellationTokenSource lifetime = new();
+    readonly System.Diagnostics.Stopwatch clock = new();
+    long clockOriginMs;
+
+    string TimeWidth => (100.0 * timeLeftMs / TimeMaxMs).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture);
+
+    string TimeFillClass =>
+        timeLeftMs * 4 <= TimeMaxMs ? "low" :
+        timeLeftMs * 2 <= TimeMaxMs ? "mid" : "";
 
     protected override void OnInitialized()
     {
+        clock.Start();
         NewGame();
+        _ = RunClockAsync();
     }
 
     void NewGame()
@@ -233,10 +294,13 @@
         score = 0;
         level = 1;
         moves = 0;
+        timeLeftMs = TimeMaxMs;
+        gameOver = false;
+        clockOriginMs = clock.ElapsedMilliseconds;
         selected = null;
         matching.Clear();
         resolving = false;
-        message = "Capture every animal on the list!";
+        message = "Capture the list before time runs out!";
         GenerateBoard();
         AssignQuota();
         ResetHintTimer();
@@ -296,9 +360,51 @@
             quota[animal] = left - 1;
     }
 
+    async Task RunClockAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(ClockTickMs));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(lifetime.Token))
+            {
+                var now = clock.ElapsedMilliseconds;
+                var delta = (int)Math.Max(0, now - clockOriginMs);
+                clockOriginMs = now;
+                if (disposed || gameOver) continue;
+
+                timeLeftMs = Math.Max(0, timeLeftMs - delta);
+                if (timeLeftMs == 0)
+                    EndByTime();
+                await RefreshAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    void EndByTime()
+    {
+        timeLeftMs = 0;
+        gameOver = true;
+        selected = null;
+        hintTiles.Clear();
+        hintVersion++;
+        message = "Time's up!";
+    }
+
+    void AddTime(int ms)
+    {
+        if (gameOver) return;
+        timeLeftMs = Math.Min(TimeMaxMs, timeLeftMs + ms);
+    }
+
     async Task OnTileClick(int r, int c)
     {
-        if (resolving) return;
+        if (resolving || gameOver) return;
 
         ResetHintTimer();
 
@@ -464,7 +570,7 @@
 
     async Task ProcessMatches(int id)
     {
-        while (id == gameId)
+        while (id == gameId && !gameOver)
         {
             var matches = FindMatches();
             if (matches.Count == 0) break;
@@ -472,6 +578,7 @@
             matching = matches;
             int points = matches.Count * 10 * level;
             score += points;
+            AddTime(matches.Count * TimeGainPerAnimalMs);
             message = $"+{points} points!";
             StateHasChanged();
             await Task.Delay(400);
@@ -507,7 +614,7 @@
             if (id != gameId) return;
         }
 
-        if (id != gameId) return;
+        if (id != gameId || gameOver) return;
 
         if (QuotaComplete())
         {
