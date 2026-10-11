@@ -56,7 +56,8 @@
 
 <style>
     .game-container {
-        --gap: clamp(2px, 0.8vw, 6px);
+        --gap: 2px;
+        --board: min(100%, 352px);
         box-sizing: border-box;
         width: 100%;
         max-width: 100%;
@@ -88,9 +89,9 @@
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 6px;
-        width: min(100%, 560px);
-        margin: 0 auto 10px;
+        gap: 4px;
+        width: var(--board);
+        margin: 0 auto 8px;
     }
     .quota-item {
         display: flex;
@@ -98,16 +99,16 @@
         gap: 4px;
         box-sizing: border-box;
         background: #fff8ea;
-        border-radius: 8px;
-        padding: 2px 8px 2px 3px;
+        border-radius: 2px;
+        padding: 1px 5px 1px 1px;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
         font-size: clamp(0.85rem, 3.4vw, 1.05rem);
         line-height: 1;
     }
     .quota-item img {
-        width: clamp(22px, 6.5vw, 30px);
-        height: clamp(22px, 6.5vw, 30px);
+        width: 20px;
+        height: 20px;
         image-rendering: pixelated;
         image-rendering: crisp-edges;
         pointer-events: none;
@@ -120,12 +121,12 @@
         flex-direction: column;
         gap: var(--gap);
         box-sizing: border-box;
-        width: min(100%, 560px);
+        width: var(--board);
         margin: 0 auto;
         background: #f4d03f;
-        padding: clamp(4px, 1.2vw, 10px);
-        border-radius: 15px;
-        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        padding: 3px;
+        border-radius: 4px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.2);
     }
     .board-row {
         display: grid;
@@ -138,43 +139,55 @@
         aspect-ratio: 1;
         min-width: 0;
         margin: 0;
-        background: #fff8ea;
-        border-radius: clamp(3px, 0.8vw, 6px);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        position: relative;
+        background: transparent;
+        border-radius: 0;
         cursor: pointer;
-        transition: transform 0.15s, box-shadow 0.15s;
+        transition: filter 0.15s, box-shadow 0.15s;
         user-select: none;
         -webkit-user-select: none;
         touch-action: manipulation;
-        border: clamp(2px, 0.4vw, 3px) solid transparent;
+        border: 0;
+        padding: 0;
     }
     @@media (hover: hover) and (pointer: fine) {
-        .tile:hover { transform: scale(1.08); }
+        .tile:hover { filter: brightness(1.08); }
     }
-    .tile.selected { border-color: #e74c3c; box-shadow: 0 0 10px #e74c3c; }
-    .tile.matching { animation: pop 0.4s ease; background: #ffeb3b; }
-    .tile.hint { animation: hint-pulse 0.7s ease-in-out 3; }
+    .tile.selected::after,
+    .tile.hint::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+    }
+    .tile.selected::after { box-shadow: inset 0 0 0 2px #e74c3c; }
+    .tile.matching { animation: pop 0.4s ease; }
+    .tile.hint::after { animation: hint-pulse 0.7s ease-in-out 3; }
     @@keyframes hint-pulse {
-        0%, 100% { background: #fff8ea; box-shadow: none; }
-        50% { background: #fff1b8; box-shadow: 0 0 0 2px rgba(255, 196, 60, 0.95); }
+        0%, 100% { box-shadow: inset 0 0 0 0 rgba(255, 196, 60, 0); }
+        50% { box-shadow: inset 0 0 0 3px #ffc43c; }
     }
     @@media (prefers-reduced-motion: reduce) {
-        .tile.hint { animation: none; box-shadow: 0 0 0 2px rgba(255, 196, 60, 0.95); }
+        .tile.hint::after { animation: none; box-shadow: inset 0 0 0 2px #ffc43c; }
+        .tile.matching { animation: none; filter: brightness(1.25); }
     }
     @@keyframes pop {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.3); }
-        100% { transform: scale(1); }
+        0% { transform: scale(1); filter: brightness(1); }
+        50% { transform: scale(1.06); filter: brightness(1.35); }
+        100% { transform: scale(1); filter: brightness(1); }
     }
     .sprite {
-        width: 82%;
-        height: 82%;
         image-rendering: pixelated;
         image-rendering: crisp-edges;
         pointer-events: none;
         -webkit-user-drag: none;
+    }
+    .tile .sprite {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
     }
     .title-sprite {
         width: 0.85em;
